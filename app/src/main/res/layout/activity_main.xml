@@ -8,7 +8,17 @@
     android:fitsSystemWindows="true"
     tools:context=".MainActivity">
 
-    <!-- Список названных городов -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="0dp"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:title="Игра в Города"
+        app:titleTextColor="@android:color/white" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerViewCities"
         android:layout_width="0dp"
@@ -18,10 +28,9 @@
         app:layout_constraintBottom_toTopOf="@+id/editTextCity"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/toolbar"
         tools:listitem="@layout/list_item" />
 
-    <!-- Поле для ввода города -->
     <EditText
         android:id="@+id/editTextCity"
         android:layout_width="0dp"
@@ -30,22 +39,20 @@
         android:layout_marginEnd="32dp"
         android:layout_marginBottom="16dp"
         android:ems="10"
-        android:hint="Введите город"
         android:gravity="center"
+        android:hint="Введите город"
         app:layout_constraintBottom_toTopOf="@+id/buttonSend"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
-    <!-- Кнопка хода -->
     <Button
         android:id="@+id/buttonSend"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="24dp"
         android:text="Ход"
-        app:layout_constraintBottom_toTopOf="@+id/fio"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
-
 
 </androidx.constraintlayout.widget.ConstraintLayout>

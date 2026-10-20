@@ -1,7 +1,23 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
     <style name="Base.Theme.CityGame" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <item name="colorPrimary">#818CF8</item>
+        <item name="colorOnPrimary">#0F172A</item>
+
+        <item name="android:colorBackground">#0F172A</item>
+        <item name="android:windowBackground">#0F172A</item>
+
+        <item name="colorSurface">#1E293B</item>
+        <item name="colorOnSurface">#F1F5F9</item>
+
+        <item name="android:fontFamily">sans-serif-medium</item>
+
+        <item name="actionBarPopupTheme">@style/ThemeOverlay.App.DarkMenu</item>
     </style>
+
+    <style name="ThemeOverlay.App.DarkMenu" parent="ThemeOverlay.AppCompat.Dark">
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+    </style>
+
+    <style name="Theme.CityGame" parent="Base.Theme.CityGame" />
 </resources>
