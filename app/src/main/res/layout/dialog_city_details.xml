@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- Большое фото с закруглением -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@android:color/transparent">
+
+            <ImageView
+                android:id="@+id/dialogImageCity"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:contentDescription="Фото города" />
+        </androidx.cardview.widget.CardView>
+
+        <!-- Заголовок описания -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Описание"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary" />
+
+        <!-- Текст описания -->
+        <TextView
+            android:id="@+id/dialogTextDescription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="15sp"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Заголовок координат -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Координаты"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary" />
+
+        <!-- Текст координат -->
+        <TextView
+            android:id="@+id/dialogTextCoords"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="?attr/colorOnSurface"
+            android:alpha="0.8"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Кликабельная ссылка на карты -->
+        <TextView
+            android:id="@+id/dialogLinkMaps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Открыть на картах ↗"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:textColor="?attr/colorPrimary"
+            android:paddingTop="4dp"
+            android:paddingBottom="16dp" />
+
+        <!-- Кнопка: Изменить описание -->
+        <Button
+            android:id="@+id/dialogBtnEditDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Изменить описание"
+            android:layout_marginBottom="8dp"
+            style="?attr/materialButtonOutlinedStyle" />
+
+        <!-- Кнопка: Сменить фото -->
+        <Button
+            android:id="@+id/dialogBtnChangePhoto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Сменить фото"
+            android:layout_marginBottom="8dp"
+            style="?attr/materialButtonOutlinedStyle" />
+
+        <!-- Кнопка: Закрыть (самая нижняя) -->
+        <Button
+            android:id="@+id/dialogBtnClose"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Закрыть"
+            style="?attr/materialButtonOutlinedStyle" />
+
+    </LinearLayout>
+</ScrollView>

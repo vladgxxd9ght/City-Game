@@ -162,6 +162,10 @@ class MainActivity : AppCompatActivity() {
                     .create()
                     .show()
             }
+            R.id.menu_cities -> {
+                val intent = android.content.Intent(this, CitiesActivity::class.java)
+                startActivity(intent)
+            }
         }
         return super.onOptionsItemSelected(item)
     }
