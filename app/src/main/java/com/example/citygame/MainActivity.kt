@@ -1,6 +1,8 @@
 package com.example.citygame
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
@@ -20,19 +22,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private var requiredLetter: Char? = null
 
-    private val computerCities = listOf(
-        "Астрахань", "Архангельск", "Барнаул", "Брянск", "Владивосток", "Воронеж",
-        "Волгоград", "Грозный", "Екатеринбург", "Иркутск", "Ижевск", "Казань",
-        "Калининград", "Краснодар", "Красноярск", "Курск", "Липецк", "Москва",
-        "Мурманск", "Новгород", "Новосибирск", "Норильск", "Омск", "Орёл",
-        "Пенза", "Пермь", "Псков", "Ростов", "Рязань", "Самара", "Саратов",
-        "Смоленск", "Сочи", "Тамбов", "Тверь", "Томск", "Тула", "Тюмень",
-        "Уфа", "Ульяновск", "Хабаровск", "Челябинск", "Чита", "Ярославль"
-    )
+    // Общий пул городов для бота и проверки
+    private val computerCities = mutableSetOf<String>()
+    private lateinit var dbHelper: CityDatabaseHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        dbHelper = CityDatabaseHelper(this)
+        loadCitiesFromAssetsAndDb()
 
         val toolbar = findViewById<Toolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
@@ -60,11 +59,19 @@ class MainActivity : AppCompatActivity() {
 
             val normalizedUserCity = userCity.lowercase()
 
+            // 1. Проверяем, существует ли вообще такой город в нашей базе данных или справочнике
+            if (!isValidCity(normalizedUserCity)) {
+                showAlert("Неизвестный город", "Такого города нет в нашей базе данных или справочнике!")
+                return@setOnClickListener
+            }
+
+            // 2. Проверяем, не назывался ли город ранее
             if (usedCities.contains(normalizedUserCity)) {
                 showAlert("Повтор!", "Город «$userCity» уже был назван в этой игре.")
                 return@setOnClickListener
             }
 
+            // 3. Проверяем нужную букву
             val firstChar = normalizedUserCity.first()
             if (requiredLetter != null && firstChar != requiredLetter) {
                 showAlert(
@@ -74,30 +81,88 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
+            // Засчитываем ход пользователя
             usedCities.add(normalizedUserCity)
             val lastUserLetter = getValidLastLetter(normalizedUserCity)
             historyList.add(userCity)
-
-            val botCity = computerCities.firstOrNull { city ->
-                val norm = city.lowercase()
-                norm.first() == lastUserLetter && !usedCities.contains(norm)
-            }
-
-            if (botCity != null) {
-                usedCities.add(botCity.lowercase())
-                requiredLetter = getValidLastLetter(botCity.lowercase())
-                historyList.add(botCity)
-            } else {
-                showAlert(
-                    "Победа! 🎉",
-                    "Компьютер не знает больше городов на букву «${lastUserLetter.uppercaseChar()}». Вы выиграли!"
-                )
-                requiredLetter = null
-            }
-
             adapter.notifyDataSetChanged()
             recyclerView.scrollToPosition(historyList.size - 1)
             editTextCity.text.clear()
+
+            // Анимация точек печати бота («Бот печатает...»)
+            val typingMessage = "Бот печатает"
+            historyList.add(typingMessage)
+            val typingIndex = historyList.size - 1
+            adapter.notifyItemInserted(typingIndex)
+            recyclerView.scrollToPosition(typingIndex)
+
+            val handler = Handler(Looper.getMainLooper())
+            val runnable = createTypingAnimation(handler, typingIndex)
+            handler.postDelayed(runnable, 350)
+
+            // Ответ бота через 1.5 секунды
+            handler.postDelayed({
+                handler.removeCallbacks(runnable)
+
+                val index = historyList.indexOfFirst { it.startsWith("Бот печатает") }
+                if (index != -1) {
+                    historyList.removeAt(index)
+                    adapter.notifyItemRemoved(index)
+                }
+
+                // Ищем ответ среди объединенного пула городов
+                val botCity = computerCities.firstOrNull { city ->
+                    val norm = city.lowercase()
+                    norm.first() == lastUserLetter && !usedCities.contains(norm)
+                }
+
+                if (botCity != null) {
+                    usedCities.add(botCity.lowercase())
+                    requiredLetter = getValidLastLetter(botCity.lowercase())
+                    historyList.add(botCity)
+                } else {
+                    showAlert(
+                        "Победа! 🎉",
+                        "Компьютер не знает больше городов на букву «${lastUserLetter.uppercaseChar()}». Вы выиграли!"
+                    )
+                    requiredLetter = null
+                }
+
+                adapter.notifyDataSetChanged()
+                recyclerView.scrollToPosition(historyList.size - 1)
+            }, 1500)
+        }
+    }
+
+    private fun loadCitiesFromAssetsAndDb() {
+        computerCities.clear()
+        val dbCities = dbHelper.getAllCities()
+        for (city in dbCities) {
+            computerCities.add(city.name)
+        }
+    }
+
+    // Проверка существования города (ищем без учета регистра)
+    private fun isValidCity(cityName: String): Boolean {
+        val dbCities = dbHelper.getAllCities()
+        for (city in dbCities) {
+            computerCities.add(city.name)
+        }
+        return computerCities.any { it.equals(cityName, ignoreCase = true) }
+    }
+
+    private fun createTypingAnimation(handler: Handler, typingIndex: Int): Runnable {
+        var dotCount = 0
+        return object : Runnable {
+            override fun run() {
+                if (historyList.getOrNull(typingIndex)?.startsWith("Бот печатает") == true) {
+                    dotCount = (dotCount % 3) + 1
+                    val dots = ".".repeat(dotCount)
+                    historyList[typingIndex] = "Бот печатает$dots"
+                    adapter.notifyItemChanged(typingIndex)
+                    handler.postDelayed(this, 350)
+                }
+            }
         }
     }
 
@@ -129,7 +194,6 @@ class MainActivity : AppCompatActivity() {
         when (item.itemId) {
             R.id.menu_theme -> {
                 val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
-
                 if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
                     AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
                 } else {
