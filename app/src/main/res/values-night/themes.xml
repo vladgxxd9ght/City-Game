@@ -1,7 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Base.Theme.CityGame" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">#818CF8</item>
-        <item name="colorOnPrimary">#0F172A</item>
+        <item name="colorPrimary">#4F46E5</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
 
         <item name="android:colorBackground">#0F172A</item>
         <item name="android:windowBackground">#0F172A</item>
@@ -11,12 +11,12 @@
 
         <item name="android:fontFamily">sans-serif-medium</item>
 
-        <item name="actionBarPopupTheme">@style/ThemeOverlay.App.DarkMenu</item>
+        <item name="actionOverflowMenuStyle">@style/Widget.Custom.PopupMenu.Dark</item>
     </style>
 
-    <style name="ThemeOverlay.App.DarkMenu" parent="ThemeOverlay.AppCompat.Dark">
+    <style name="Widget.Custom.PopupMenu.Dark" parent="Widget.Material3.PopupMenu.Overflow">
+        <item name="android:popupBackground">#1E293B</item>
         <item name="android:textColor">#FFFFFF</item>
-        <item name="android:textColorPrimary">#FFFFFF</item>
     </style>
 
     <style name="Theme.CityGame" parent="Base.Theme.CityGame" />
