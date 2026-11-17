@@ -1,7 +1,5 @@
 package com.example.citygame
 
-import nl.dionsegijn.konfetti.core.emitter.Emitter
-import java.util.concurrent.TimeUnit
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.app.NotificationChannel
@@ -30,7 +28,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import nl.dionsegijn.konfetti.core.Party
 import nl.dionsegijn.konfetti.core.Position
+import nl.dionsegijn.konfetti.core.emitter.Emitter
 import nl.dionsegijn.konfetti.xml.KonfettiView
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // --- ЛР №11: Инициализация уведомлений ---
         createNotificationChannel()
         requestNotificationPermission()
 
@@ -69,10 +70,9 @@ class MainActivity : AppCompatActivity() {
         }
         adapter.notifyDataSetChanged()
 
+        // --- ЛР №2, 5: Обработка хода игрока ---
         buttonSend.setOnClickListener {
-            val scaleDown = ObjectAnimator.ofFloat(buttonSend, "scaleX", 1f, 0.9f).apply { duration = 100 }
-            val scaleUp = ObjectAnimator.ofFloat(buttonSend, "scaleX", 0.9f, 1f).apply { duration = 100 }
-            AnimatorSet().apply { playSequentially(scaleDown, scaleUp) }.start()
+            animateButtonClick(buttonSend) // ЛР №6: Анимация кнопки
 
             val userCity = editTextCity.text.toString().trim()
 
@@ -109,6 +109,7 @@ class MainActivity : AppCompatActivity() {
             recyclerView.scrollToPosition(historyList.size - 1)
             editTextCity.text.clear()
 
+            // Анимация "Бот печатает"
             val typingMessage = "Бот печатает"
             historyList.add(typingMessage)
             val typingIndex = historyList.size - 1
@@ -119,6 +120,7 @@ class MainActivity : AppCompatActivity() {
             val runnable = createTypingAnimation(handler, typingIndex)
             handler.postDelayed(runnable, 350)
 
+            // Ответ бота
             handler.postDelayed({
                 handler.removeCallbacks(runnable)
 
@@ -138,9 +140,9 @@ class MainActivity : AppCompatActivity() {
                     requiredLetter = getValidLastLetter(botCity.lowercase())
                     historyList.add(botCity)
 
-                    val blinkAnimation = AnimationUtils.loadAnimation(this, R.anim.blink)
-                    buttonSend.startAnimation(blinkAnimation)
+                    blinkButton(buttonSend) // ЛР №6: Мигание кнопки
                 } else {
+                    // ЛР №6, 11, 12: Победа (Конфетти + Звук + Уведомление + Диалог)
                     showVictorySequence(lastUserLetter)
                     requiredLetter = null
                 }
@@ -150,6 +152,49 @@ class MainActivity : AppCompatActivity() {
             }, 1500)
         }
     }
+
+    // ==========================================
+    // ЛР №5, 9: РАБОТА СО СПИСКАМИ И МЕНЮ
+    // ==========================================
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu, menu)
+        return super.onCreateOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.menu_theme -> {
+                val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
+                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+                } else {
+                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+                }
+                recreate()
+            }
+            R.id.menu_restart -> {
+                historyList.clear()
+                usedCities.clear()
+                requiredLetter = null
+                historyList.add("Игра началась заново! Назовите любой город.")
+                adapter.notifyDataSetChanged()
+            }
+            R.id.menu_cities -> {
+                val intent = android.content.Intent(this, CitiesActivity::class.java)
+                startActivity(intent)
+            }
+            R.id.menu_about -> showAboutDialog() // ЛР №10
+            R.id.menu_exit -> showExitDialog()   // ЛР №10
+            R.id.menu_check_notification -> showNotificationDialog() // ЛР №11
+            R.id.menu_check_sound -> showSoundDialog()               // ЛР №12
+        }
+        return super.onOptionsItemSelected(item)
+    }
+
+    // ==========================================
+    // ЛР №2, 5: ИГРОВАЯ ЛОГИКА
+    // ==========================================
 
     private fun loadCitiesFromAssetsAndDb() {
         computerCities.clear()
@@ -192,82 +237,29 @@ class MainActivity : AppCompatActivity() {
         return city.last()
     }
 
-    private fun showAlert(title: String, message: String) {
+    // ==========================================
+    // ЛР №6: АНИМАЦИИ
+    // ==========================================
+
+    private fun animateButtonClick(button: Button) {
+        val scaleDown = ObjectAnimator.ofFloat(button, "scaleX", 1f, 0.9f).apply { duration = 100 }
+        val scaleUp = ObjectAnimator.ofFloat(button, "scaleX", 0.9f, 1f).apply { duration = 100 }
+        AnimatorSet().apply { playSequentially(scaleDown, scaleUp) }.start()
+    }
+
+    private fun blinkButton(button: Button) {
+        val blinkAnimation = AnimationUtils.loadAnimation(this, R.anim.blink)
+        button.startAnimation(blinkAnimation)
+    }
+
+    private fun shakeInput() {
         val editText = findViewById<EditText>(R.id.editTextCity)
         val shakeAnimation = AnimationUtils.loadAnimation(this, R.anim.shake)
         editText.startAnimation(shakeAnimation)
-
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setNeutralButton("OK") { dialog, _ -> dialog.dismiss() }
-            .create()
-            .show()
-    }
-
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu, menu)
-        return super.onCreateOptionsMenu(menu)
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.menu_theme -> {
-                val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
-                if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-                } else {
-                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-                }
-                recreate()
-            }
-            R.id.menu_restart -> {
-                historyList.clear()
-                usedCities.clear()
-                requiredLetter = null
-                historyList.add("Игра началась заново! Назовите любой город.")
-                adapter.notifyDataSetChanged()
-            }
-            R.id.menu_check_notification -> {
-                showNotificationDialog()
-            }
-            R.id.menu_about -> {
-                val dialog = AlertDialog.Builder(this)
-                try {
-                    dialog.setMessage(
-                        "Игра «Города» версия " +
-                                packageManager.getPackageInfo(packageName, 0).versionName +
-                                "\r\n\nПрограмма с примером выполнения диалогового окна" +
-                                "\r\n\nАвтор - " + getString(R.string.fio)
-                    )
-                } catch (e: PackageManager.NameNotFoundException) {
-                    e.printStackTrace()
-                }
-                dialog.setTitle("О программе")
-                dialog.setNeutralButton("OK") { dialogInterface, _ ->
-                    dialogInterface.dismiss()
-                }
-                dialog.setIcon(R.mipmap.ic_launcher_round)
-                dialog.create().show()
-            }
-            R.id.menu_exit -> {
-                AlertDialog.Builder(this)
-                    .setMessage("Вы действительно хотите выйти?")
-                    .setCancelable(false)
-                    .setPositiveButton("Да") { _, _ -> finish() }
-                    .setNegativeButton("Нет") { dialog, _ -> dialog.cancel() }
-                    .create()
-                    .show()
-            }
-            R.id.menu_cities -> {
-                val intent = android.content.Intent(this, CitiesActivity::class.java)
-                startActivity(intent)
-            }
-        }
-        return super.onOptionsItemSelected(item)
     }
 
     private fun showVictorySequence(lastLetter: Char) {
+        // 1. Конфетти
         val konfettiView = findViewById<KonfettiView>(R.id.konfettiView)
         val party = Party(
             speed = 0f,
@@ -281,6 +273,93 @@ class MainActivity : AppCompatActivity() {
         )
         konfettiView.start(party)
 
+        // 2. Звук победы (ЛР №12)
+        playVictorySound()
+
+        // 3. Уведомление (ЛР №11)
+        sendVictoryNotification()
+
+        // 4. Диалог (ЛР №10)
+        showAlert(
+            "Победа!",
+            "Компьютер не знает больше городов на букву «${lastLetter.uppercaseChar()}». Вы выиграли!"
+        )
+    }
+
+    // ==========================================
+    // ЛР №10: ДИАЛОГОВЫЕ ОКНА
+    // ==========================================
+
+    private fun showAlert(title: String, message: String) {
+        shakeInput() // Добавляем тряску при любой ошибке (ЛР №6)
+
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setNeutralButton("OK") { dialog, _ -> dialog.dismiss() }
+            .create()
+            .show()
+    }
+
+    private fun showAboutDialog() {
+        val dialog = AlertDialog.Builder(this)
+        try {
+            dialog.setMessage(
+                "Игра «Города» версия " +
+                        packageManager.getPackageInfo(packageName, 0).versionName +
+                        "\r\n\nПрограмма с примером выполнения диалогового окна" +
+                        "\r\n\nАвтор - " + getString(R.string.fio)
+            )
+        } catch (e: PackageManager.NameNotFoundException) {
+            e.printStackTrace()
+        }
+        dialog.setTitle("О программе")
+        dialog.setNeutralButton("OK") { dialogInterface, _ -> dialogInterface.dismiss() }
+        dialog.setIcon(R.mipmap.ic_launcher_round)
+        dialog.create().show()
+    }
+
+    private fun showExitDialog() {
+        AlertDialog.Builder(this)
+            .setMessage("Вы действительно хотите выйти?")
+            .setCancelable(false)
+            .setPositiveButton("Да") { _, _ -> finish() }
+            .setNegativeButton("Нет") { dialog, _ -> dialog.cancel() }
+            .create()
+            .show()
+    }
+
+    // ==========================================
+    // ЛР №12: РАБОТА С АУДИО
+    // ==========================================
+
+    private fun showSoundDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Проверить звук")
+            .setMessage("Воспроизвести тестовый звук?")
+            .setPositiveButton("Да") { _, _ -> playTestSound() }
+            .setNegativeButton("Отмена", null)
+            .setIcon(R.mipmap.ic_launcher_round)
+            .show()
+    }
+
+    private fun playTestSound() {
+        try {
+            val mediaPlayer = MediaPlayer.create(this, R.raw.test_sound)
+            if (mediaPlayer == null) {
+                android.widget.Toast.makeText(this, "Не удалось загрузить звук", android.widget.Toast.LENGTH_SHORT).show()
+                return
+            }
+            mediaPlayer.start()
+            mediaPlayer.setOnCompletionListener { it.release() }
+            android.widget.Toast.makeText(this, "Звук воспроизводится", android.widget.Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            android.widget.Toast.makeText(this, "Ошибка: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun playVictorySound() {
         try {
             val mediaPlayer = MediaPlayer.create(this, R.raw.victory_sound)
             mediaPlayer.start()
@@ -288,14 +367,11 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-
-        sendVictoryNotification()
-
-        showAlert(
-            "Победа!",
-            "Компьютер не знает больше городов на букву «${lastLetter.uppercaseChar()}». Вы выиграли!"
-        )
     }
+
+    // ==========================================
+    // ЛР №11: РАБОТА С УВЕДОМЛЕНИЯМИ
+    // ==========================================
 
     private fun showNotificationDialog() {
         AlertDialog.Builder(this)
@@ -303,8 +379,6 @@ class MainActivity : AppCompatActivity() {
             .setMessage("Отправить тестовое уведомление через 5 секунд?\n\n")
             .setPositiveButton("Да") { _, _ ->
                 android.widget.Toast.makeText(this, "Уведомление придет через 5 секунд...", android.widget.Toast.LENGTH_SHORT).show()
-
-
                 Handler(Looper.getMainLooper()).postDelayed({
                     showTestNotification()
                 }, 5000)

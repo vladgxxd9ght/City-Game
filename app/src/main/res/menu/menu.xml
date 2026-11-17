@@ -4,6 +4,9 @@
         android:id="@+id/menu_check_notification"
         android:title="Проверить уведомление" />
     <item
+        android:id="@+id/menu_check_sound"
+        android:title="Проверить звук" />
+    <item
         android:id="@+id/menu_theme"
         android:title="Сменить тему" />
     <item
