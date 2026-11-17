@@ -1,6 +1,8 @@
 package com.example.citygame
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
@@ -15,9 +17,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import java.io.File
 
 class CitiesActivity : AppCompatActivity() {
 
@@ -30,31 +35,28 @@ class CitiesActivity : AppCompatActivity() {
     private var targetCityForPhoto: City? = null
     private var newCityImageUri: String? = null
     private var tempThumbImageView: ImageView? = null
+    private var currentCameraPhotoUri: Uri? = null // Для хранения пути к фото с камеры
 
+    // Лаунчер для Галереи
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { imageUri ->
-            // Запрашиваем постоянные права на чтение
-            try {
-                contentResolver.takePersistableUriPermission(
-                    imageUri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        uri?.let { handleImageUri(it) }
+    }
 
-            val uriString = imageUri.toString()
-            if (targetCityForPhoto != null) {
-                targetCityForPhoto?.imageUri = uriString
-                targetCityForPhoto?.let { dbHelper.updateCityPhoto(it.name, uriString) }
-                adapter.notifyDataSetChanged()
-                Toast.makeText(this, "Фото обновлено в БД!", Toast.LENGTH_SHORT).show()
-                targetCityForPhoto = null
-            } else {
-                newCityImageUri = uriString
-                tempThumbImageView?.setImageURI(imageUri)
-                Toast.makeText(this, "Фото выбрано", Toast.LENGTH_SHORT).show()
-            }
+    // Лаунчер для Камеры (ЛР №14)
+    private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) {
+            currentCameraPhotoUri?.let { handleImageUri(it) }
+        } else {
+            Toast.makeText(this, "Съемка отменена", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Запрос разрешения на камеру
+    private val requestCameraPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            openCamera()
+        } else {
+            Toast.makeText(this, "Нет разрешения на камеру", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -85,6 +87,63 @@ class CitiesActivity : AppCompatActivity() {
         }
     }
 
+    // --- Логика обработки полученного URI (из галереи или камеры) ---
+    private fun handleImageUri(imageUri: Uri) {
+        try {
+            contentResolver.takePersistableUriPermission(
+                imageUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (e: Exception) {
+            // Если это URI из кэша камеры, права брать не нужно
+        }
+
+        val uriString = imageUri.toString()
+        if (targetCityForPhoto != null) {
+            targetCityForPhoto?.imageUri = uriString
+            targetCityForPhoto?.let { dbHelper.updateCityPhoto(it.name, uriString) }
+            adapter.notifyDataSetChanged()
+            Toast.makeText(this, "Фото обновлено в БД!", Toast.LENGTH_SHORT).show()
+            targetCityForPhoto = null
+        } else {
+            newCityImageUri = uriString
+            tempThumbImageView?.setImageURI(imageUri)
+            Toast.makeText(this, "Фото выбрано", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // --- Диалог выбора источника фото (ЛР №14) ---
+    private fun showPhotoSourceDialog() {
+        val options = arrayOf("Сделать фото (Камера)", "Выбрать из галереи")
+        AlertDialog.Builder(this)
+            .setTitle("Источник фото")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> checkCameraPermissionAndOpen()
+                    1 -> pickImageLauncher.launch("image/*")
+                }
+            }
+            .show()
+    }
+
+    private fun checkCameraPermissionAndOpen() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            openCamera()
+        } else {
+            requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun openCamera() {
+        val photoFile = File.createTempFile("camera_photo_", ".jpg", cacheDir)
+        currentCameraPhotoUri = FileProvider.getUriForFile(
+            this,
+            "${packageName}.fileprovider",
+            photoFile
+        )
+        takePictureLauncher.launch(currentCameraPhotoUri)
+    }
+
     private fun loadCitiesFromDatabase() {
         citiesList.clear()
         citiesList.addAll(dbHelper.getAllCities())
@@ -109,10 +168,10 @@ class CitiesActivity : AppCompatActivity() {
         }
 
         val btnSelectPhoto = Button(context).apply {
-            text = "Выбрать фото из галереи"
+            text = "Выбрать фото" // Изменили текст
             setOnClickListener {
                 targetCityForPhoto = null
-                pickImageLauncher.launch("image/*")
+                showPhotoSourceDialog() // Вызываем диалог выбора
             }
         }
 
@@ -209,21 +268,19 @@ class CitiesActivity : AppCompatActivity() {
             .setView(dialogView)
             .create()
 
-        // Обработчик кнопки "Изменить описание"
         btnEditDesc.setOnClickListener {
             showEditDescriptionDialog(city) { newDesc ->
                 descText.text = newDesc
             }
         }
 
-        // Обработчик кнопки "Сменить фото"
+        // Обработчик кнопки "Сменить фото" - тоже даем выбор!
         btnChangePhoto.setOnClickListener {
             targetCityForPhoto = city
-            pickImageLauncher.launch("image/*")
+            showPhotoSourceDialog()
             dialog.dismiss()
         }
 
-        // Обработчик кнопки "Удалить" (ЛР №15)
         btnDelete.setOnClickListener {
             AlertDialog.Builder(context)
                 .setTitle("Удалить город")
@@ -239,7 +296,6 @@ class CitiesActivity : AppCompatActivity() {
                 .show()
         }
 
-        // Обработчик кнопки "Закрыть"
         btnClose.setOnClickListener {
             dialog.dismiss()
         }
@@ -247,7 +303,6 @@ class CitiesActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    // Улучшенный метод редактирования с callback-ом для обновления UI
     private fun showEditDescriptionDialog(city: City, onUpdated: (String) -> Unit) {
         val context = this
         val input = EditText(context).apply {
