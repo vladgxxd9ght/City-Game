@@ -9,7 +9,7 @@ class CityDatabaseHelper(private val context: Context) : SQLiteOpenHelper(contex
 
     companion object {
         private const val DATABASE_NAME = "cities.db"
-        private const val DATABASE_VERSION = 6 // Подняли версию для обновления БД
+        private const val DATABASE_VERSION = 7 // Подняли версию, чтобы применились изменения
 
         private const val TABLE_NAME = "cities"
         private const val COLUMN_ID = "id"
@@ -25,7 +25,7 @@ class CityDatabaseHelper(private val context: Context) : SQLiteOpenHelper(contex
         val createTableQuery = """
             CREATE TABLE $TABLE_NAME (
                 $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
-                $COLUMN_NAME TEXT,
+                $COLUMN_NAME TEXT UNIQUE,
                 $COLUMN_DESC TEXT,
                 $COLUMN_IMAGE_RES INTEGER,
                 $COLUMN_IMAGE_URI TEXT,
@@ -43,7 +43,6 @@ class CityDatabaseHelper(private val context: Context) : SQLiteOpenHelper(contex
     }
 
     private fun populateAllCities(db: SQLiteDatabase?) {
-        // Полный список городов с описаниями и координатами
         val allCities = listOf(
             arrayOf("Москва", "Столица России, мегаполис.", "55.751244", "37.618423"),
             arrayOf("Санкт-Петербург", "Культурная столица на Неве.", "59.938630", "30.314130"),
@@ -78,7 +77,8 @@ class CityDatabaseHelper(private val context: Context) : SQLiteOpenHelper(contex
                 put(COLUMN_LAT, city[2].toDouble())
                 put(COLUMN_LON, city[3].toDouble())
             }
-            db?.insert(TABLE_NAME, null, values)
+            // Используем CONFLICT_IGNORE, чтобы не было крашей при дубликатах
+            db?.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_IGNORE)
         }
     }
 
@@ -86,32 +86,22 @@ class CityDatabaseHelper(private val context: Context) : SQLiteOpenHelper(contex
         val cityList = mutableListOf<City>()
         val db = this.readableDatabase
 
-        val cursorCheck = db.rawQuery("SELECT COUNT(*) FROM $TABLE_NAME", null)
-        cursorCheck.moveToFirst()
-        val count = cursorCheck.getInt(0)
-        cursorCheck.close()
+        // Используем .use для автоматического закрытия курсора
+        db.rawQuery("SELECT * FROM $TABLE_NAME", null).use { cursor ->
+            if (cursor.moveToFirst()) {
+                do {
+                    val name = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_NAME))
+                    val desc = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DESC))
+                    val imageRes = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_IMAGE_RES))
+                    val imageUri = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_IMAGE_URI))
+                    val lat = cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_LAT))
+                    val lon = cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_LON))
 
-        if (count == 0) {
-            db.close()
-            populateAllCities(this.writableDatabase)
-            return getAllCities()
+                    cityList.add(City(name, desc, imageRes, imageUri, lat, lon))
+                } while (cursor.moveToNext())
+            }
         }
-
-        val cursor = db.rawQuery("SELECT * FROM $TABLE_NAME", null)
-        if (cursor.moveToFirst()) {
-            do {
-                val name = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_NAME))
-                val desc = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DESC))
-                val imageRes = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_IMAGE_RES))
-                val imageUri = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_IMAGE_URI))
-                val lat = cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_LAT))
-                val lon = cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_LON))
-
-                cityList.add(City(name, desc, imageRes, imageUri, lat, lon))
-            } while (cursor.moveToNext())
-        }
-        cursor.close()
-        db.close()
+        // ВАЖНО: Больше не вызываем db.close() здесь!
         return cityList
     }
 
@@ -125,21 +115,22 @@ class CityDatabaseHelper(private val context: Context) : SQLiteOpenHelper(contex
             put(COLUMN_LAT, city.latitude)
             put(COLUMN_LON, city.longitude)
         }
-        db.insert(TABLE_NAME, null, values)
-        db.close()
+        db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     fun updateCityDescription(cityName: String, newDesc: String) {
         val db = this.writableDatabase
         val values = ContentValues().apply { put(COLUMN_DESC, newDesc) }
         db.update(TABLE_NAME, values, "$COLUMN_NAME = ?", arrayOf(cityName))
-        db.close()
     }
 
     fun updateCityPhoto(cityName: String, newUri: String) {
         val db = this.writableDatabase
         val values = ContentValues().apply { put(COLUMN_IMAGE_URI, newUri) }
         db.update(TABLE_NAME, values, "$COLUMN_NAME = ?", arrayOf(cityName))
-        db.close()
+    }
+    fun deleteCity(cityName: String) {
+        val db = this.writableDatabase
+        db.delete(TABLE_NAME, "$COLUMN_NAME = ?", arrayOf(cityName))
     }
 }

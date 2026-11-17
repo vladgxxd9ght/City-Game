@@ -18,7 +18,6 @@ import androidx.appcompat.widget.Toolbar
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import android.view.ViewGroup
 
 class CitiesActivity : AppCompatActivity() {
 
@@ -34,6 +33,16 @@ class CitiesActivity : AppCompatActivity() {
 
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { imageUri ->
+            // Запрашиваем постоянные права на чтение
+            try {
+                contentResolver.takePersistableUriPermission(
+                    imageUri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
             val uriString = imageUri.toString()
             if (targetCityForPhoto != null) {
                 targetCityForPhoto?.imageUri = uriString
@@ -63,7 +72,6 @@ class CitiesActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.recyclerViewCitiesList)
         recyclerView.layoutManager = LinearLayoutManager(this)
 
-        // Загружаем данные из базы данных при старте
         loadCitiesFromDatabase()
 
         adapter = CityListAdapter(citiesList) { city ->
@@ -145,10 +153,8 @@ class CitiesActivity : AppCompatActivity() {
                         longitude = lon
                     )
 
-                    // Сохраняем в БД
                     dbHelper.addCity(newCity)
 
-                    // Перезагружаем список из БД
                     loadCitiesFromDatabase()
                     adapter.notifyDataSetChanged()
                     recyclerView.scrollToPosition(citiesList.size - 1)
@@ -173,9 +179,9 @@ class CitiesActivity : AppCompatActivity() {
 
         val btnEditDesc = dialogView.findViewById<Button>(R.id.dialogBtnEditDesc)
         val btnChangePhoto = dialogView.findViewById<Button>(R.id.dialogBtnChangePhoto)
+        val btnDelete = dialogView.findViewById<Button>(R.id.dialogBtnDelete)
         val btnClose = dialogView.findViewById<Button>(R.id.dialogBtnClose)
 
-        // Устанавливаем данные
         if (city.imageUri != null) {
             imageView.setImageURI(Uri.parse(city.imageUri))
         } else {
@@ -198,7 +204,6 @@ class CitiesActivity : AppCompatActivity() {
             }
         }
 
-        // Создаем диалог без системных кнопок
         val dialog = AlertDialog.Builder(context)
             .setTitle(city.name)
             .setView(dialogView)
@@ -207,7 +212,7 @@ class CitiesActivity : AppCompatActivity() {
         // Обработчик кнопки "Изменить описание"
         btnEditDesc.setOnClickListener {
             showEditDescriptionDialog(city) { newDesc ->
-                descText.text = newDesc // Мгновенно обновляем текст в открытом диалоге
+                descText.text = newDesc
             }
         }
 
@@ -216,6 +221,22 @@ class CitiesActivity : AppCompatActivity() {
             targetCityForPhoto = city
             pickImageLauncher.launch("image/*")
             dialog.dismiss()
+        }
+
+        // Обработчик кнопки "Удалить" (ЛР №15)
+        btnDelete.setOnClickListener {
+            AlertDialog.Builder(context)
+                .setTitle("Удалить город")
+                .setMessage("Вы уверены, что хотите удалить «${city.name}» из справочника?")
+                .setPositiveButton("Да") { _, _ ->
+                    dbHelper.deleteCity(city.name)
+                    loadCitiesFromDatabase()
+                    adapter.notifyDataSetChanged()
+                    dialog.dismiss()
+                    Toast.makeText(context, "Город удален", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("Нет", null)
+                .show()
         }
 
         // Обработчик кнопки "Закрыть"
@@ -245,33 +266,7 @@ class CitiesActivity : AppCompatActivity() {
                     loadCitiesFromDatabase()
                     adapter.notifyDataSetChanged()
 
-                    onUpdated(newDesc) // Передаем новое описание в открытый диалог деталей
-                    Toast.makeText(context, "Описание обновлено в БД!", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("Отмена", null)
-            .show()
-    }
-    private fun showEditDescriptionDialog(city: City) {
-        val context = this
-        val input = EditText(context).apply {
-            hint = "Введите новое описание"
-            setText(city.description)
-        }
-
-        AlertDialog.Builder(context)
-            .setTitle("Редактировать описание")
-            .setView(input)
-            .setPositiveButton("Сохранить") { _, _ ->
-                val newDesc = input.text.toString().trim()
-                if (newDesc.isNotEmpty()) {
-                    // Обновляем в БД
-                    dbHelper.updateCityDescription(city.name, newDesc)
-
-                    // Перезагружаем список
-                    loadCitiesFromDatabase()
-                    adapter.notifyDataSetChanged()
-
+                    onUpdated(newDesc)
                     Toast.makeText(context, "Описание обновлено в БД!", Toast.LENGTH_SHORT).show()
                 }
             }

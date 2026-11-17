@@ -65,8 +65,16 @@ class MainActivity : AppCompatActivity() {
         adapter = CityAdapter(historyList)
         recyclerView.adapter = adapter
 
+        // ЛР №15: Чтение имени из SharedPreferences
+        val prefs = getSharedPreferences("GAME_SETTINGS", android.content.Context.MODE_PRIVATE)
+        val savedPlayerName = prefs.getString("PLAYER_NAME", "")
+
         if (historyList.isEmpty()) {
-            historyList.add("Игра началась! Назовите любой город.")
+            if (!savedPlayerName.isNullOrEmpty()) {
+                historyList.add("Привет, $savedPlayerName! Назовите любой город.")
+            } else {
+                historyList.add("Игра началась! Назовите любой город.")
+            }
         }
         adapter.notifyDataSetChanged()
 
@@ -164,6 +172,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
+            R.id.menu_settings -> {
+                startActivity(android.content.Intent(this, SettingsActivity::class.java))
+            }
             R.id.menu_theme -> {
                 val currentNightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
                 if (currentNightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
@@ -273,13 +284,13 @@ class MainActivity : AppCompatActivity() {
         )
         konfettiView.start(party)
 
-        // 2. Звук победы (ЛР №12)
+        // 2. Звук победы
         playVictorySound()
 
-        // 3. Уведомление (ЛР №11)
+        // 3. Уведомление
         sendVictoryNotification()
 
-        // 4. Диалог (ЛР №10)
+        // 4. Диалог
         showAlert(
             "Победа!",
             "Компьютер не знает больше городов на букву «${lastLetter.uppercaseChar()}». Вы выиграли!"
@@ -291,14 +302,16 @@ class MainActivity : AppCompatActivity() {
     // ==========================================
 
     private fun showAlert(title: String, message: String) {
-        shakeInput() // Добавляем тряску при любой ошибке (ЛР №6)
+        shakeInput() // Запускаем тряску поля ввода
 
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setNeutralButton("OK") { dialog, _ -> dialog.dismiss() }
-            .create()
-            .show()
+        Handler(Looper.getMainLooper()).postDelayed({
+            AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setNeutralButton("OK") { dialog, _ -> dialog.dismiss() }
+                .create()
+                .show()
+        }, 500)
     }
 
     private fun showAboutDialog() {
