@@ -1,18 +1,36 @@
 package com.example.citygame
 
+import nl.dionsegijn.konfetti.core.emitter.Emitter
+import java.util.concurrent.TimeUnit
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Menu
 import android.view.MenuItem
+import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.Toolbar
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import nl.dionsegijn.konfetti.core.Party
+import nl.dionsegijn.konfetti.core.Position
+import nl.dionsegijn.konfetti.xml.KonfettiView
 
 class MainActivity : AppCompatActivity() {
 
@@ -22,13 +40,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private var requiredLetter: Char? = null
 
-    // Общий пул городов для бота и проверки
     private val computerCities = mutableSetOf<String>()
     private lateinit var dbHelper: CityDatabaseHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        createNotificationChannel()
+        requestNotificationPermission()
 
         dbHelper = CityDatabaseHelper(this)
         loadCitiesFromAssetsAndDb()
@@ -50,6 +70,10 @@ class MainActivity : AppCompatActivity() {
         adapter.notifyDataSetChanged()
 
         buttonSend.setOnClickListener {
+            val scaleDown = ObjectAnimator.ofFloat(buttonSend, "scaleX", 1f, 0.9f).apply { duration = 100 }
+            val scaleUp = ObjectAnimator.ofFloat(buttonSend, "scaleX", 0.9f, 1f).apply { duration = 100 }
+            AnimatorSet().apply { playSequentially(scaleDown, scaleUp) }.start()
+
             val userCity = editTextCity.text.toString().trim()
 
             if (userCity.isEmpty()) {
@@ -59,19 +83,16 @@ class MainActivity : AppCompatActivity() {
 
             val normalizedUserCity = userCity.lowercase()
 
-            // 1. Проверяем, существует ли вообще такой город в нашей базе данных или справочнике
             if (!isValidCity(normalizedUserCity)) {
                 showAlert("Неизвестный город", "Такого города нет в нашей базе данных или справочнике!")
                 return@setOnClickListener
             }
 
-            // 2. Проверяем, не назывался ли город ранее
             if (usedCities.contains(normalizedUserCity)) {
                 showAlert("Повтор!", "Город «$userCity» уже был назван в этой игре.")
                 return@setOnClickListener
             }
 
-            // 3. Проверяем нужную букву
             val firstChar = normalizedUserCity.first()
             if (requiredLetter != null && firstChar != requiredLetter) {
                 showAlert(
@@ -81,7 +102,6 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // Засчитываем ход пользователя
             usedCities.add(normalizedUserCity)
             val lastUserLetter = getValidLastLetter(normalizedUserCity)
             historyList.add(userCity)
@@ -89,7 +109,6 @@ class MainActivity : AppCompatActivity() {
             recyclerView.scrollToPosition(historyList.size - 1)
             editTextCity.text.clear()
 
-            // Анимация точек печати бота («Бот печатает...»)
             val typingMessage = "Бот печатает"
             historyList.add(typingMessage)
             val typingIndex = historyList.size - 1
@@ -100,7 +119,6 @@ class MainActivity : AppCompatActivity() {
             val runnable = createTypingAnimation(handler, typingIndex)
             handler.postDelayed(runnable, 350)
 
-            // Ответ бота через 1.5 секунды
             handler.postDelayed({
                 handler.removeCallbacks(runnable)
 
@@ -110,7 +128,6 @@ class MainActivity : AppCompatActivity() {
                     adapter.notifyItemRemoved(index)
                 }
 
-                // Ищем ответ среди объединенного пула городов
                 val botCity = computerCities.firstOrNull { city ->
                     val norm = city.lowercase()
                     norm.first() == lastUserLetter && !usedCities.contains(norm)
@@ -120,11 +137,11 @@ class MainActivity : AppCompatActivity() {
                     usedCities.add(botCity.lowercase())
                     requiredLetter = getValidLastLetter(botCity.lowercase())
                     historyList.add(botCity)
+
+                    val blinkAnimation = AnimationUtils.loadAnimation(this, R.anim.blink)
+                    buttonSend.startAnimation(blinkAnimation)
                 } else {
-                    showAlert(
-                        "Победа! 🎉",
-                        "Компьютер не знает больше городов на букву «${lastUserLetter.uppercaseChar()}». Вы выиграли!"
-                    )
+                    showVictorySequence(lastUserLetter)
                     requiredLetter = null
                 }
 
@@ -142,7 +159,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Проверка существования города (ищем без учета регистра)
     private fun isValidCity(cityName: String): Boolean {
         val dbCities = dbHelper.getAllCities()
         for (city in dbCities) {
@@ -177,6 +193,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAlert(title: String, message: String) {
+        val editText = findViewById<EditText>(R.id.editTextCity)
+        val shakeAnimation = AnimationUtils.loadAnimation(this, R.anim.shake)
+        editText.startAnimation(shakeAnimation)
+
         AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(message)
@@ -208,14 +228,27 @@ class MainActivity : AppCompatActivity() {
                 historyList.add("Игра началась заново! Назовите любой город.")
                 adapter.notifyDataSetChanged()
             }
+            R.id.menu_check_notification -> {
+                showNotificationDialog()
+            }
             R.id.menu_about -> {
-                AlertDialog.Builder(this)
-                    .setTitle("О программе")
-                    .setMessage("Игра «Города» v1.0\n\nАвтор: ${getString(R.string.fio)}")
-                    .setNeutralButton("OK") { dialog, _ -> dialog.dismiss() }
-                    .setIcon(R.mipmap.ic_launcher_round)
-                    .create()
-                    .show()
+                val dialog = AlertDialog.Builder(this)
+                try {
+                    dialog.setMessage(
+                        "Игра «Города» версия " +
+                                packageManager.getPackageInfo(packageName, 0).versionName +
+                                "\r\n\nПрограмма с примером выполнения диалогового окна" +
+                                "\r\n\nАвтор - " + getString(R.string.fio)
+                    )
+                } catch (e: PackageManager.NameNotFoundException) {
+                    e.printStackTrace()
+                }
+                dialog.setTitle("О программе")
+                dialog.setNeutralButton("OK") { dialogInterface, _ ->
+                    dialogInterface.dismiss()
+                }
+                dialog.setIcon(R.mipmap.ic_launcher_round)
+                dialog.create().show()
             }
             R.id.menu_exit -> {
                 AlertDialog.Builder(this)
@@ -232,5 +265,111 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return super.onOptionsItemSelected(item)
+    }
+
+    private fun showVictorySequence(lastLetter: Char) {
+        val konfettiView = findViewById<KonfettiView>(R.id.konfettiView)
+        val party = Party(
+            speed = 0f,
+            maxSpeed = 30f,
+            damping = 0.9f,
+            spread = 360,
+            colors = listOf(0xfce18a, 0xff726d, 0xf4306d, 0xb48def),
+            position = Position.Relative(0.5, 0.5),
+            timeToLive = 2500L,
+            emitter = Emitter(duration = 100, TimeUnit.MILLISECONDS).max(100)
+        )
+        konfettiView.start(party)
+
+        try {
+            val mediaPlayer = MediaPlayer.create(this, R.raw.victory_sound)
+            mediaPlayer.start()
+            mediaPlayer.setOnCompletionListener { it.release() }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        sendVictoryNotification()
+
+        showAlert(
+            "Победа!",
+            "Компьютер не знает больше городов на букву «${lastLetter.uppercaseChar()}». Вы выиграли!"
+        )
+    }
+
+    private fun showNotificationDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Проверить уведомление")
+            .setMessage("Отправить тестовое уведомление через 5 секунд?\n\n")
+            .setPositiveButton("Да") { _, _ ->
+                android.widget.Toast.makeText(this, "Уведомление придет через 5 секунд...", android.widget.Toast.LENGTH_SHORT).show()
+
+
+                Handler(Looper.getMainLooper()).postDelayed({
+                    showTestNotification()
+                }, 5000)
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
+
+    private fun showTestNotification() {
+        val builder = NotificationCompat.Builder(this, "GAME_CHANNEL_ID")
+            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setContentTitle("Привет из игры «Города»!")
+            .setContentText("Это тестовое уведомление со звуком.")
+            .setTicker("Новое уведомление!")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            NotificationManagerCompat.from(this).notify(3, builder.build())
+        }
+    }
+
+    private fun sendVictoryNotification() {
+        val builder = NotificationCompat.Builder(this, "GAME_CHANNEL_ID")
+            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setContentTitle("Поздравляем с победой!")
+            .setContentText("Компьютер сдался. Вы настоящий знаток городов!")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setTicker("Новое уведомление!")
+            .setAutoCancel(true)
+
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            NotificationManagerCompat.from(this).notify(1, builder.build())
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Игровые события"
+            val descriptionText = "Уведомления о победах в игре"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel("GAME_CHANNEL_ID", name, importance).apply {
+                description = descriptionText
+
+                val audioAttributes = android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+
+                val soundUri = android.net.Uri.parse(
+                    android.content.ContentResolver.SCHEME_ANDROID_RESOURCE + "://" +
+                            packageName + "/" + R.raw.victory_sound
+                )
+                setSound(soundUri, audioAttributes)
+            }
+            val notificationManager: NotificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
     }
 }
